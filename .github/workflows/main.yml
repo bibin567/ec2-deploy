@@ -20,6 +20,18 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
+      - name: Create ~/.ssh directory
+        run: mkdir -p $HOME/.ssh
+
+      - name: SSH key scan
+        run: ssh-keyscan -H ${{ env.INSTANCE_PUBLIC_IP }} >> $HOME/.ssh/known_hosts
+
+      - name: Install and configure httpd
+        run: |
+          ssh -i $HOME/.ssh/id_rsa ec2-user@${{ env.INSTANCE_PUBLIC_IP }} 'sudo yum install -y httpd'
+          # Copy your website's files to /var/www/html
+          # Configure httpd and start the service
+
       - name: Launch EC2 instance
         id: launch-ec2
         run: |
@@ -45,11 +57,13 @@ jobs:
           echo "Instance Public IP: $instance_public_ip"
           echo "INSTANCE_PUBLIC_IP=$instance_public_ip" >> $GITHUB_ENV
 
-      - name: Install and configure httpd
+      - name: Deploy website
         run: |
-          ssh-keyscan -H ${{ env.INSTANCE_PUBLIC_IP }} >> $HOME/.ssh/known_hosts
-          ssh -i $HOME/.ssh/id_rsa ec2-user@${{ env.INSTANCE_PUBLIC_IP }} 'sudo yum install -y httpd'
-          # Copy your website's files to /var/www/html
-          # Configure httpd and start the service
+          ssh -i $HOME/.ssh/id_rsa ec2-user@${{ env.INSTANCE_PUBLIC_IP }} 'git clone https://github.com/bibin567/project.git /var/www/html'
+          # Additional configuration or commands if needed
 
-      # Rest of the code...
+      - name: Restart httpd service
+        run: |
+          ssh -i $HOME/.ssh/id_rsa ec2-user@${{ env.INSTANCE_PUBLIC_IP }} 'sudo service httpd restart'
+
+      # Additional steps or tasks as needed
