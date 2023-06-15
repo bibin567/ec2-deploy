@@ -23,7 +23,6 @@ jobs:
       - name: Launch EC2 instance
         id: launch-ec2
         run: |
-          # Launch the EC2 instance and retrieve the instance ID
           instance_id=$(aws ec2 run-instances \
             --image-id ami-022e1a32d3f742bd8 \
             --instance-type t2.micro \
@@ -34,16 +33,7 @@ jobs:
           echo "Instance ID: $instance_id"
           echo "INSTANCE_ID=$instance_id" >> $GITHUB_ENV
 
-          # Add an inbound rule for SSH (port 22) to the security group
-          aws ec2 authorize-security-group-ingress \
-            --group-id sg-0ef2a0a9a7dc4c932 \
-            --protocol tcp \
-            --port 22 \
-            --cidr 0.0.0.0/0
-
-      - name: Wait for EC2 instance to start
-        run: |
-          aws ec2 wait instance-running --instance-ids ${{ env.INSTANCE_ID }}
+          aws ec2 wait instance-running --instance-ids $instance_id
 
       - name: Retrieve instance public IP
         id: get-instance-ip
@@ -57,27 +47,9 @@ jobs:
 
       - name: Install and configure httpd
         run: |
-          mkdir -p $HOME/.ssh
-          touch $HOME/.ssh/known_hosts
           ssh-keyscan -H ${{ env.INSTANCE_PUBLIC_IP }} >> $HOME/.ssh/known_hosts
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > $HOME/.ssh/id_rsa
-          chmod 600 $HOME/.ssh/id_rsa
           ssh -i $HOME/.ssh/id_rsa ec2-user@${{ env.INSTANCE_PUBLIC_IP }} 'sudo yum install -y httpd'
           # Copy your website's files to /var/www/html
           # Configure httpd and start the service
 
-      - name: Clone website repository
-        run: |
-          git clone https://github.com/bibin567/project.git
-          
-      - name: Copy website files to EC2 instance
-        run: |
-          scp -i $HOME/.ssh/id_rsa -r project/* ec2-user@${{ env.INSTANCE_PUBLIC_IP }}:/var/www/html/
-
-      - name: Test website
-        run: |
-          # Perform any necessary tests on the deployed website
-
-      - name: Clean up
-        run: |
-          aws ec2 terminate-instances --instance-ids ${{ env.INSTANCE_ID }}
+      # Rest of the code...
