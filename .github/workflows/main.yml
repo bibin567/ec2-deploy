@@ -23,6 +23,7 @@ jobs:
       - name: Launch EC2 instance
         id: launch-ec2
         run: |
+          # Launch the EC2 instance and retrieve the instance ID
           instance_id=$(aws ec2 run-instances \
             --image-id ami-022e1a32d3f742bd8 \
             --instance-type t2.micro \
@@ -32,6 +33,13 @@ jobs:
             --output text)
           echo "Instance ID: $instance_id"
           echo "INSTANCE_ID=$instance_id" >> $GITHUB_ENV
+
+          # Add an inbound rule for SSH (port 22) to the security group
+          aws ec2 authorize-security-group-ingress \
+            --group-id sg-0ef2a0a9a7dc4c932 \
+            --protocol tcp \
+            --port 22 \
+            --cidr 0.0.0.0/0
 
       - name: Wait for EC2 instance to start
         run: |
@@ -58,9 +66,13 @@ jobs:
           # Copy your website's files to /var/www/html
           # Configure httpd and start the service
 
-      - name: Deploy to EC2 instance
+      - name: Clone website repository
         run: |
-          scp -i $HOME/.ssh/id_rsa -r <path-to-website-files> ec2-user@${{ env.INSTANCE_PUBLIC_IP }}:/var/www/html/
+          git clone https://github.com/bibin567/project.git
+          
+      - name: Copy website files to EC2 instance
+        run: |
+          scp -i $HOME/.ssh/id_rsa -r project/* ec2-user@${{ env.INSTANCE_PUBLIC_IP }}:/var/www/html/
 
       - name: Test website
         run: |
