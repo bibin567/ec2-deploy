@@ -1,4 +1,4 @@
-name: Deploy to EC2
+name: Deploy EC2 Instance and Website
 
 on:
   push:
@@ -8,63 +8,62 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
+    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
+    - name: Checkout code
+      uses: actions/checkout@v2
 
-      - name: Set up AWS credentials
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+    - name: Set up AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1
 
-      - name: Create ~/.ssh directory
-        run: mkdir -p $HOME/.ssh
+    - name: Launch EC2 instance
+      id: launch-ec2
+      run: |
+        instance_id=$(aws ec2 run-instances \
+          --image-id ami-022e1a32d3f742bd8 \
+          --instance-type t2.micro \
+          --security-group-ids sg-0ef2a0a9a7dc4c932 \
+          --subnet-id subnet-05669903535280275 \
+          --query 'Instances[0].InstanceId' \
+          --output text)
+        echo "Instance ID: $instance_id"
+        echo "INSTANCE_ID=$instance_id" >> $GITHUB_ENV
 
-      - name: SSH key scan
-        run: |
-          ssh-keyscan -H ${{ env.INSTANCE_PUBLIC_IP }} >> $HOME/.ssh/known_hosts
+        aws ec2 wait instance-running --instance-ids $instance_id
 
-      - name: Install and configure httpd
-        run: |
-          ssh -i $HOME/.ssh/id_rsa ec2-user@${{ env.INSTANCE_PUBLIC_IP }} 'sudo yum install -y httpd'
-          # Copy your website's files to /var/www/html
-          # Configure httpd and start the service
+    - name: Retrieve instance public IP
+      id: get-instance-ip
+      run: |
+        instance_public_ip=$(aws ec2 describe-instances \
+          --instance-ids ${{ env.INSTANCE_ID }} \
+          --query 'Reservations[0].Instances[0].PublicIpAddress' \
+          --output text)
+        echo "Instance Public IP: $instance_public_ip"
+        echo "INSTANCE_PUBLIC_IP=$instance_public_ip" >> $GITHUB_ENV
 
-      - name: Launch EC2 instance
-        id: launch-ec2
-        run: |
-          instance_id=$(aws ec2 run-instances \
-            --image-id ami-022e1a32d3f742bd8 \
-            --instance-type t2.micro \
-            --security-group-ids sg-0ef2a0a9a7dc4c932 \
-            --subnet-id subnet-05669903535280275 \
-            --query 'Instances[0].InstanceId' \
-            --output text)
-          echo "Instance ID: $instance_id"
-          echo "INSTANCE_ID=$instance_id" >> $GITHUB_ENV
+    - name: Wait for SSH connectivity
+      run: |
+        ssh-keyscan -H ${{ env.INSTANCE_PUBLIC_IP }} >> $HOME/.ssh/known_hosts
+        ssh -o StrictHostKeyChecking=no -i $HOME/.ssh/id_rsa ec2-user@${{ env.INSTANCE_PUBLIC_IP }} exit
 
-          aws ec2 wait instance-running --instance-ids $instance_id
+    - name: Install Apache HTTP Server
+      run: |
+        ssh -i $HOME/.ssh/id_rsa ec2-user@${{ env.INSTANCE_PUBLIC_IP }} 'sudo yum install -y httpd'
 
-      - name: Retrieve instance public IP
-        id: get-instance-ip
-        run: |
-          instance_public_ip=$(aws ec2 describe-instances \
-            --instance-ids ${{ env.INSTANCE_ID }} \
-            --query 'Reservations[0].Instances[0].PublicIpAddress' \
-            --output text)
-          echo "Instance Public IP: $instance_public_ip"
-          echo "INSTANCE_PUBLIC_IP=$instance_public_ip" >> $GITHUB_ENV
+    - name: Copy website files to EC2 instance
+      run: |
+        git clone https://github.com/bibin567/project.git
+        scp -i $HOME/.ssh/id_rsa -r project ec2-user@${{ env.INSTANCE_PUBLIC_IP }}:/var/www/html/
 
-      - name: Deploy website
-        run: |
-          ssh -i $HOME/.ssh/id_rsa ec2-user@${{ env.INSTANCE_PUBLIC_IP }} 'git clone https://github.com/bibin567/project.git /var/www/html'
-          # Additional configuration or commands if needed
+    - name: Start Apache HTTP Server
+      run: |
+        ssh -i $HOME/.ssh/id_rsa ec2-user@${{ env.INSTANCE_PUBLIC_IP }} 'sudo systemctl start httpd'
 
-      - name: Restart httpd service
-        run: |
-          ssh -i $HOME/.ssh/id_rsa ec2-user@${{ env.INSTANCE_PUBLIC_IP }} 'sudo service httpd restart'
+    - name: Print Website URL
+      run: |
+        echo "Website URL: http://${{ env.INSTANCE_PUBLIC_IP }}"
 
-      # Additional steps or tasks as needed
