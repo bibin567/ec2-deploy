@@ -1,0 +1,67 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Launch EC2 instance
+        id: launch-ec2
+        run: |
+          instance_id=$(aws ec2 run-instances \
+            --image-id ami-022e1a32d3f742bd8 \
+            --instance-type t2.micro \
+            --security-group-ids sg-0ef2a0a9a7dc4c932 \
+            --subnet-id subnet-05669903535280275 \
+            --query 'Instances[0].InstanceId' \
+            --output text)
+          echo "Instance ID: $instance_id"
+          echo "::set-output name=instance-id::$instance_id"
+
+      - name: Wait for EC2 instance to start
+        run: |
+          aws ec2 wait instance-running --instance-ids ${{ steps.launch-ec2.outputs.instance-id }}
+
+      - name: Retrieve instance public IP
+        id: get-instance-ip
+        run: |
+          public_ip=$(aws ec2 describe-instances \
+            --instance-ids ${{ steps.launch-ec2.outputs.instance-id }} \
+            --query 'Reservations[0].Instances[0].PublicIpAddress' \
+            --output text)
+          echo "Instance Public IP: $public_ip"
+          echo "::set-output name=instance-public-ip::$public_ip"
+
+      - name: Install and configure httpd
+        run: |
+          ssh-keyscan -H ${{ steps.get-instance-ip.outputs.instance-public-ip }} >> ~/.ssh/known_hosts
+          ssh -i $HOME/.ssh/id_rsa ec2-user@${{ steps.get-instance-ip.outputs.instance-public-ip }} 'sudo yum install -y httpd'
+          # Copy your website's files to /var/www/html
+          # Configure httpd and start the service
+
+      - name: Deploy to EC2 instance
+        run: |
+          scp -i $HOME/.ssh/id_rsa> -r https://github.com/bibin567/project.git ec2-user@${{ steps.get-instance-ip.outputs.instance-public-ip }}:/var/www/html/
+
+      - name: Test website
+        run: |
+          # Perform any necessary tests on the deployed website
+
+      - name: Clean up
+        run: |
+          aws ec2 terminate-instances --instance-ids ${{ steps.launch-ec2.outputs.instance-id }}
