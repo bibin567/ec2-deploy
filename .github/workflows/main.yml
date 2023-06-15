@@ -24,10 +24,10 @@ jobs:
         id: launch-ec2
         run: |
           instance_id=$(aws ec2 run-instances \
-            --image-id ami-0123456789abcdef0 \
+            --image-id ami-022e1a32d3f742bd8 \
             --instance-type t2.micro \
-            --security-group-ids sg-0123456789abcdef0 \
-            --subnet-id subnet-0123456789abcdef0 \
+            --security-group-ids sg-0ef2a0a9a7dc4c932 \
+            --subnet-id subnet-05669903535280275 \
             --query 'Instances[0].InstanceId' \
             --output text)
           echo "Instance ID: $instance_id"
