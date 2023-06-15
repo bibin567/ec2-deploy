@@ -24,43 +24,43 @@ jobs:
         id: launch-ec2
         run: |
           instance_id=$(aws ec2 run-instances \
-            --image-id ami-022e1a32d3f742bd8 \
+            --image-id ami-0123456789abcdef0 \
             --instance-type t2.micro \
-            --security-group-ids sg-0ef2a0a9a7dc4c932 \
-            --subnet-id subnet-05669903535280275 \
+            --security-group-ids sg-0123456789abcdef0 \
+            --subnet-id subnet-0123456789abcdef0 \
             --query 'Instances[0].InstanceId' \
             --output text)
           echo "Instance ID: $instance_id"
-          echo "::set-output name=instance-id::$instance_id"
+          echo "INSTANCE_ID=$instance_id" >> $GITHUB_ENV
 
       - name: Wait for EC2 instance to start
         run: |
-          aws ec2 wait instance-running --instance-ids ${{ steps.launch-ec2.outputs.instance-id }}
+          aws ec2 wait instance-running --instance-ids ${{ env.INSTANCE_ID }}
 
       - name: Retrieve instance public IP
         id: get-instance-ip
         run: |
-          public_ip=$(aws ec2 describe-instances \
-            --instance-ids ${{ steps.launch-ec2.outputs.instance-id }} \
+          instance_public_ip=$(aws ec2 describe-instances \
+            --instance-ids ${{ env.INSTANCE_ID }} \
             --query 'Reservations[0].Instances[0].PublicIpAddress' \
             --output text)
-          echo "Instance Public IP: $public_ip"
-          echo "::set-output name=instance-public-ip::$public_ip"
+          echo "Instance Public IP: $instance_public_ip"
+          echo "INSTANCE_PUBLIC_IP=$instance_public_ip" >> $GITHUB_ENV
 
       - name: Install and configure httpd
         run: |
           mkdir -p $HOME/.ssh
           touch $HOME/.ssh/known_hosts
-          ssh-keyscan -H ${{ steps.get-instance-ip.outputs.instance-public-ip }} >> $HOME/.ssh/known_hosts
+          ssh-keyscan -H ${{ env.INSTANCE_PUBLIC_IP }} >> $HOME/.ssh/known_hosts
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > $HOME/.ssh/id_rsa
           chmod 600 $HOME/.ssh/id_rsa
-          ssh -i $HOME/.ssh/id_rsa ec2-user@${{ steps.get-instance-ip.outputs.instance-public-ip }} 'sudo yum install -y httpd'
+          ssh -i $HOME/.ssh/id_rsa ec2-user@${{ env.INSTANCE_PUBLIC_IP }} 'sudo yum install -y httpd'
           # Copy your website's files to /var/www/html
           # Configure httpd and start the service
 
       - name: Deploy to EC2 instance
         run: |
-          scp -i $HOME/.ssh/id_rsa -r https://github.com/bibin567/project.git ec2-user@${{ steps.get-instance-ip.outputs.instance-public-ip }}:/var/www/html/
+          scp -i $HOME/.ssh/id_rsa -r <path-to-website-files> ec2-user@${{ env.INSTANCE_PUBLIC_IP }}:/var/www/html/
 
       - name: Test website
         run: |
@@ -68,4 +68,4 @@ jobs:
 
       - name: Clean up
         run: |
-          aws ec2 terminate-instances --instance-ids ${{ steps.launch-ec2.outputs.instance-id }}
+          aws ec2 terminate-instances --instance-ids ${{ env.INSTANCE_ID }}
