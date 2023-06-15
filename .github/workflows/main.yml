@@ -45,33 +45,19 @@ jobs:
         echo "Instance Public IP: $instance_public_ip"
         echo "INSTANCE_PUBLIC_IP=$instance_public_ip" >> $GITHUB_ENV
 
-    - name: Create SSH directory and known_hosts file
-      run: |
-        mkdir -p $HOME/.ssh
-        touch $HOME/.ssh/known_hosts
-
-    - name: Add EC2 instance to known hosts
-      run: |
-        ssh-keyscan -H ${{ env.INSTANCE_PUBLIC_IP }} >> $HOME/.ssh/known_hosts
-
-    - name: SSH into EC2 instance
-      run: |
-        ssh -o StrictHostKeyChecking=no -i $HOME/.ssh/id_rsa ec2-user@${{ env.INSTANCE_PUBLIC_IP }} exit
-
     - name: Install Apache HTTP Server
       run: |
-        ssh -i $HOME/.ssh/id_rsa ec2-user@${{ env.INSTANCE_PUBLIC_IP }} 'sudo yum install -y httpd'
+        ssh -i $HOME/.ssh/id_rsa ec2-user@${{ env.INSTANCE_PUBLIC_IP }} sudo yum install -y httpd
 
     - name: Copy website files to EC2 instance
       run: |
         git clone https://github.com/bibin567/project.git
-        scp -i $HOME/.ssh/id_rsa -r project ec2-user@${{ env.INSTANCE_PUBLIC_IP }}:/var/www/html/
+        scp -i $HOME/.ssh/id_rsa -r project/. ec2-user@${{ env.INSTANCE_PUBLIC_IP }}:/var/www/html/
 
     - name: Start Apache HTTP Server
       run: |
-        ssh -i $HOME/.ssh/id_rsa ec2-user@${{ env.INSTANCE_PUBLIC_IP }} 'sudo systemctl start httpd'
+        ssh -i $HOME/.ssh/id_rsa ec2-user@${{ env.INSTANCE_PUBLIC_IP }} sudo systemctl start httpd
 
     - name: Print Website URL
       run: |
         echo "Website URL: http://${{ env.INSTANCE_PUBLIC_IP }}"
-
