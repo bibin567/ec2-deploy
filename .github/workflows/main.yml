@@ -45,9 +45,10 @@ jobs:
         echo "Instance Public IP: $instance_public_ip"
         echo "INSTANCE_PUBLIC_IP=$instance_public_ip" >> $GITHUB_ENV
 
-    - name: Generate SSH key pair
+    - name: Create SSH directory and known_hosts file
       run: |
-        ssh-keygen -t rsa -b 4096 -f $HOME/.ssh/id_rsa -N ""
+        mkdir -p $HOME/.ssh
+        touch $HOME/.ssh/known_hosts
 
     - name: Add EC2 instance to known hosts
       run: |
